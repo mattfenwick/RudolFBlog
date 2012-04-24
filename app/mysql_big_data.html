@@ -1,0 +1,341 @@
+<!doctype html>
+<html>
+<head>
+    <title>MySQL: 50 million rows</title>
+    <meta name="description" content="blog" />
+    <meta name="keywords" content="programming" />
+    <meta name="author" content="Matt Fenwick" />
+    
+    <link rel="stylesheet" type="text/css" href="/stylesheets/style.css" />
+</head>
+
+  <body>
+<p><h1>MySQL: performance of a large table</h1>
+This article examines how well MySQL deals with a large (50 million row) table, covering indexes, inserts, selects, deletes, and updates.
+</p>
+
+<p><h2>The set-up</h2>
+<table>
+<tr><th>MySQL version</th><th>5.5.11</th></tr>
+<tr><td>operating system</td><td>Mac OS X 10.5.8</td></tr>
+<tr><td>processor</td><td>2 x 2.8 GHz Quad-Core Intel Xeon</td></tr>
+<tr><td>RAM</td><td>6 GB 800 MHz DDR2</td></tr>
+<tr><td>hard drive</td><td>300 GB, about 75% free</td></tr>
+<tr><td>programming language</td><td>Clojure</td></tr>
+<tr><td>MySQL driver</td><td>JDBC</td></tr>
+<tr><td>number of rows</td><td>50 million</td></tr>
+<tr><td>approximate average row size</td><td>115 bytes</td></tr>
+</table>
+
+Here's the schema:
+<pre class="code">
+create table mediumtable (
+ id                 int primary key auto_increment,
+ decimalfield1      decimal(10,2),
+ indexedstringfield varchar(10),
+   index isf (indexedstringfield(4)),
+ indexfield1        int,
+ indexfield2        int,
+   index if1if2 (indexfield1, indexfield2)
+);
+
+
+create table largetable (
+ id             int primary key auto_increment,
+ intfield1      int,
+ indexedintfield int,
+   index iif (indexedintfield),
+ stringfield    varchar(50),
+ foreignkeyfield int,
+   foreign key (foreignkeyfield) references mediumtable (id),
+ indexfield1    int,
+ indexfield2    int,
+ indexfield3    int,
+   index if1if2if3 (indexfield1, indexfield2, indexfield3),
+ notnullint     int not null,
+ notnullstring  varchar(20) not null
+);
+</pre>
+</p>
+
+<p><h2>Building the database</h2>
+I used Clojure to generate and insert 50 million rows for "largetable" and 50000 rows for "mediumtable".  For each column, a random string or integer was generated depending on the type.
+Here's the code that was used:
+<pre class="code">
+(defn make-random-record
+  []
+  (let [f1 (rand-int 10000000)
+        f2 (rand-int 1000)
+        f3 (get-rand-string 40)
+        f4 (+ 1 (rand-int 50005)) ;; because the keys are 1 to 50005 
+        f5 (rand-int 100000)
+        f6 (rand-int 100000)
+        f7 (rand-int 100000)
+        f8 (rand-int 100000000)
+        f9 (get-rand-string 15)]
+    {:intfield1       f1 
+     :indexedintfield f2
+     :stringfield     f3
+     :foreignkeyfield f4
+     :indexfield1     f5
+     :indexfield2     f6
+     :indexfield3     f7
+     :notnullint      f8
+     :notnullstring   f9}))
+
+(defn insert-random-record
+  """inserts n randomly generated records into 'largetable'"""
+  [n]
+  (with-connection db
+   (dotimes [_ n]
+    (insert-records "largetable" (make-random-record)))))
+</pre>
+
+Row insertion, done with `(time (insert-random-record 50000000))`, took 33.5 hours.
+</p>
+
+
+<p><h2>Index statistics</h2>
+<pre class="code">
+mysql> select * from information_schema.statistics where table_schema = 'mysqlclojure';
++---------------+--------------+-------------+------------+--------------+-----------------+--------------+--------------------+-----------+-------------+----------+--------+----------+------------+---------+---------------+
+| TABLE_CATALOG | TABLE_SCHEMA | TABLE_NAME  | NON_UNIQUE | INDEX_SCHEMA | INDEX_NAME      | SEQ_IN_INDEX | COLUMN_NAME        | COLLATION | CARDINALITY | SUB_PART | PACKED | NULLABLE | INDEX_TYPE | COMMENT | INDEX_COMMENT |
++---------------+--------------+-------------+------------+--------------+-----------------+--------------+--------------------+-----------+-------------+----------+--------+----------+------------+---------+---------------+
+| def           | mysqlclojure | largetable  |          0 | mysqlclojure | PRIMARY         |            1 | id                 | A         |    50000169 |     NULL | NULL   |          | BTREE      |         |               |
+| def           | mysqlclojure | largetable  |          1 | mysqlclojure | iif             |            1 | indexedintfield    | A         |          18 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | largetable  |          1 | mysqlclojure | foreignkeyfield |            1 | foreignkeyfield    | A         |       82372 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | largetable  |          1 | mysqlclojure | if1if2if3       |            1 | indexfield1        | A         |      217392 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | largetable  |          1 | mysqlclojure | if1if2if3       |            2 | indexfield2        | A         |    50000169 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | largetable  |          1 | mysqlclojure | if1if2if3       |            3 | indexfield3        | A         |    50000169 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | mediumtable |          0 | mysqlclojure | PRIMARY         |            1 | id                 | A         |       50242 |     NULL | NULL   |          | BTREE      |         |               |
+| def           | mysqlclojure | mediumtable |          1 | mysqlclojure | isf             |            1 | indexedstringfield | A         |       50242 |        4 | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | mediumtable |          1 | mysqlclojure | if1if2          |            1 | indexfield1        | A         |       25121 |     NULL | NULL   | YES      | BTREE      |         |               |
+| def           | mysqlclojure | mediumtable |          1 | mysqlclojure | if1if2          |            2 | indexfield2        | A         |       50242 |     NULL | NULL   | YES      | BTREE      |         |               |
++---------------+--------------+-------------+------------+--------------+-----------------+--------------+--------------------+-----------+-------------+----------+--------+----------+------------+---------+---------------+
+10 rows in set (1.65 sec)
+
+
+mysql> show indexes from largetable;
++------------+------------+-----------------+--------------+-----------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+| Table      | Non_unique | Key_name        | Seq_in_index | Column_name     | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
++------------+------------+-----------------+--------------+-----------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+| largetable |          0 | PRIMARY         |            1 | id              | A         |    50000169 |     NULL | NULL   |      | BTREE      |         |               |
+| largetable |          1 | iif             |            1 | indexedintfield | A         |          18 |     NULL | NULL   | YES  | BTREE      |         |               |
+| largetable |          1 | foreignkeyfield |            1 | foreignkeyfield | A         |       65876 |     NULL | NULL   | YES  | BTREE      |         |               |
+| largetable |          1 | if1if2if3       |            1 | indexfield1     | A         |      245098 |     NULL | NULL   | YES  | BTREE      |         |               |
+| largetable |          1 | if1if2if3       |            2 | indexfield2     | A         |    50000169 |     NULL | NULL   | YES  | BTREE      |         |               |
+| largetable |          1 | if1if2if3       |            3 | indexfield3     | A         |    50000169 |     NULL | NULL   | YES  | BTREE      |         |               |
++------------+------------+-----------------+--------------+-----------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+6 rows in set (1.54 sec)
+</pre>
+</p>
+
+<p><h2>Performance of "select" statements, part 1: using the primary key</h2>
+Selecting 1 row:
+<pre class="code">
+select * from largetable where id = 45000000;
+...
+1 row in set (0.02 sec)
+</pre>
+
+Select 15 non-consecutive rows:
+<pre class="code">
+select * from largetable where id in (900, 1000, 10000, 100000, 1000000, 10000000, 48000000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000);
+...
+15 rows in set (0.14 sec)
+</pre>
+
+Selecting 10000 consecutive rows:
+<pre class="code">
+select * from largetable where id between 2000000 and 2010000;
+...
+10001 rows in set (0.06 sec)
+</pre>
+
+Note that it's faster to select many consecutive rows than few non-consecutive rows.  This is because random I/Os are more expensive than sequential I/Os.  Also, whereas presumably each of the non-consecutive rows is on a separate disk page, the pages filled by the consecutive rows are probably filled *only* with those rows.
+
+Also note that re-running each of these queries results in much faster execution the second time, presumably due to page caching.  Since there are no concurrent inserts, this doesn't cause any concurrency issues.
+</p>
+
+
+
+<p><h2>Performance of "select" statements, part 2: using secondary indexes</h2>
+
+Selecting a single row by secondary index value:
+<pre class="code">
+select * from largetable where indexedintfield = 155 limit 1;
+...
+1 row in set (0.11 sec)
+</pre>
+
+Selecting 15 rows by secondary index value:
+<pre class="code">
+select * from largetable where indexfield1 = 14900 limit 15;
+...
+15 rows in set (0.13 sec)
+</pre>
+
+Selecting many rows by secondary index value:
+<pre class="code">
+select * from largetable where indexfield1 = 149;
+...
+502 rows in set (5.95 sec)
+</pre>
+
+Select a range of rows by secondary index value:
+<pre class="code">
+select * from largetable where indexfield1 between 149 and 152;
+...
+2058 rows in set (17.97 sec)
+</pre>
+
+Note the similarity in execution time between query 2 and the second query of the primary key section:  0.14 secs vs 0.13 secs.  Both have to read 15 rows that are essentially randomly distributed on disk. 
+
+Also note that reading 2000 rows from a secondary index takes about 1000 times as long per row as reading from a primary index.  Again, this is because InnoDB stores rows more or less consecutively by primary key value.
+</p>
+
+
+
+<p><h2>Performance of "select" statements, part 3: aggregates</h2>
+Grouping on a secondary index:
+
+<pre class="code">
+select indexedintfield, count(*) from largetable group by indexedintfield;
+...
+1000 rows in set (7 min 59.51 sec)
+</pre>
+
+To answer this query, even though MySQL doesn't have to read the table itself, it still has to read the entire index on "indexedintfield", which is on the order of hundreds of millions of bytes (at the leaf level of the index, there are 50 million entries, each with the index value and the primary key value -- even allowing for compression of identical index values, there are still over 50 million integers, and this is ignoring overhead.
+
+<hr />
+Counting the number of rows in the table:
+
+<pre class="code">
+mysql> select count(*) from largetable;
+...
+1 row in set (5 min 48.61 sec)
+
+mysql> select count(*) from largetable force index (primary);
+...
+1 row in set (2 min 22.84 sec)
+</pre>
+
+Apparently, the performance of this query depends on which storage engine is in use.  InnoDB has to read the entire table.
+
+Also note that forcing use of the primary (clustered) index speeds up the query.  It's unclear to me why MySQL uses a secondary index when given the choice.
+</p>
+
+
+
+<p><h2>Performance of "insert" statements</h2>
+The speed of insert operations may have slowed down at this size.  When the table was nearly empty, approximately 500 rows/second could be inserted from Clojure.  
+With 50 million rows already in the table, approximately 350 rows/second are inserted using the same function.  I am not sure if this is due to the table size or to some other factor.
+</p>
+
+
+
+<p><h2>Performance of "update" statements</h2>
+Updating by primary key value:
+<pre class="code">
+mysql> update largetable set notnullint = notnullint + 2 where id > 49950000;
+Query OK, 50000 rows affected (0.61 sec)
+Rows matched: 50000  Changed: 50000  Warnings: 0
+</pre>
+
+Updating by secondary key value:
+<pre class="code">
+mysql> update largetable set notnullint = notnullint + 2 where indexedintfield = 999;
+Query OK, 49744 rows affected (5 min 25.59 sec)
+Rows matched: 49744  Changed: 49744  Warnings: 0
+</pre>
+
+No surprises here:  the I/O necessary to find the rows completely dwarfs all other costs.
+</p>
+
+
+
+<p><h2>Performance of "delete" statements</h2>
+Deleting rows by primary key value:
+<pre class="code">
+mysql> delete from largetable where id = 50000001;
+Query OK, 1 row affected (0.23 sec)
+</pre>
+
+Deleting rows by secondary key value:
+<pre class="code">
+mysql> delete from largetable where indexedintfield = 500 and id > 50000000 limit 1;
+Query OK, 1 row affected (1.50 sec)
+</pre>
+
+Deleting ~170,000 rows by primary key range:
+<pre class="code">
+mysql> delete from largetable where id > 50000000;
+Query OK, 1 row affected (2 min 17.28 sec)
+</pre>
+
+As expected, it's faster to delete by primary key than secondary.  What is surprising is how long it takes to delete many rows by primary key value.
+</p>
+
+
+
+<p><h2>Performance of "select" statements, part 4: joins</h2>
+Since there is a one-to-many relation between "mediumtable" and "largetable",
+joins with the "where" clause restricting "largetable" are fast:
+<pre class="code">
+select * from largetable l inner join mediumtable m on l.foreignkeyfield = m.id where l.id = 56;
+...
+1 row in set (0.00 sec)
+</pre>
+
+while joins with the "where" clause restricting "mediumtable" are slow: 
+<pre class="code">
+select * from largetable l inner join mediumtable m on l.foreignkeyfield = m.id where m.id = 56;
+...
+982 rows in set (9.72 sec)
+</pre>
+This is because each row of "mediumtable" corresponds to many rows in "largetable" (as shown in the query results), which are spread around in various disk pages.
+
+<pre class="code">
+mysql> select * from largetable l inner join mediumtable m on l.foreignkeyfield = m.id where l.id <= 500;
+...
+500 rows in set (5.99 sec)
+
+mysql> select * from largetable l inner join mediumtable m on l.foreignkeyfield = m.id where l.id between 150000 and 150499;
+...
+500 rows in set (0.09 sec)
+</pre>
+
+I'm not sure why the second query is so much faster than the first, but I assume it's because "mediumtable" is loaded into cache during execution of the first query, so that the second query doesn't need to do any (or very little) I/O on "mediumtable".
+</p>
+
+
+
+<p><h2>Performance of "select" statements, part 5: subqueries</h2>
+Check out these two queries:
+<pre class="code">
+mysql> select max(indexedintfield), min(indexedintfield) from largetable;
+...
+1 row in set (0.00 sec)
+
+mysql> explain select max(a), min(a) from (select indexedintfield a from largetable) q;
+...
+??
+</pre>
+What's the difference?  The second one uses a subquery to rename fields, but it takes much longer to execute.  Looks like MySQL's historical problems with subqueries are still ongoing.
+</p>
+
+
+
+<p><h2>Conclusions</h2>
+What we've seen leads me to the conclusions that MySQL works fine as an OLTP database with 50 million rows, <b>if the queries are restricted to simple joins primary key selects</b>
+(note that all of this was done on a PC, without any performance tuning -- by no means a high-end server).
+However, aggregate queries and subqueries do not seem to work well and would probably cause an unacceptable performance hit if this were a "live" database.  
+If that were the case, denormalization might be necessary.
+Therefore, I would be very hesitant to do any data analysis with such a setup.
+It's also to note that, with such a large database, full backups and dumps take a <b>very</b> long time; sharding and partitioning become important.
+</p>
+
+
+  </body>
+
+</html>

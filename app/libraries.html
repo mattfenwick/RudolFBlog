@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+<head>
+    <title>Libraries & Databases</title>
+    <meta name="description" content="blog" />
+    <meta name="keywords" content="programming" />
+    <meta name="author" content="Matt Fenwick" />
+    
+    <link rel="stylesheet" type="text/css" href="/stylesheets/style.css" />
+</head>
+
+  <body>
+
+<p>
+<h1>Introduction</h1>
+
+What do libraries and databases have in common?  Superficially, nothing -- one's a place where people go to get books, the other is a program for storing data.  So they're totally different, right?  Not so fast ...
+</p>
+
+
+<p>
+<h2>Libraries and Databases:  definitions</h2>
+
+Libraries are building that have shelves full of books on all topics.  Patrons are allowed to come and borrow books, provided they have a library code and they return the books later.  The books are organized in a specific way on the shelves that makes it easy to find them.  There are many librarians to help patrons in case of difficulties.  Periodically, the library buys new books and gets rid of old ones.
+
+<br />
+<br />
+
+A database is a program for the electronic storage, retrieval, and analysis of data.  
+Rows of data are stored in tables; tables have columns for storing units of data.  
+Programs can access the database, provided they have a username and password, and permissions.  
+Databases are highly optimized to provide efficient access to data.  Rows may be added and deleted from tables.
+</p>
+
+
+<p><h2>A shallow comparison</h2>
+
+For the rest of this article, I'll investigate, compare, and contrast facets of libraries with corresponding facets of databases.
+</p>
+
+<h3>patron: client program</h3>
+<p>A patron is a person who uses a library; a client program uses a database.</p>
+
+<h3>librarian: in-memory caching</h3>
+<p>A librarian assists patrons, helping decrease the time they spend trying to accomplish tasks at the library.  Librarians are paid for their time.
+Databases can cache query results, indexes, and data pages in memory to answer client requests faster.  Such caching uses valuable memory.
+Thus, both increase the efficiency of their respective systems, at the cost of system resources.</p>
+
+<h3>checking out books: locking rows and tables</h3>
+<p>A patron may check out a book from the library, and take that book home, during which time he or she is the only one able to use the book.  
+A database transaction may place a lock on a row or a table, preventing access for other transactions until it is finished.  
+Thus, both of these restrict concurrent access to resources.</p>
+
+<h3>Non-borrowable materials:  access control policies</h3>
+<p>Some library items are not available for checkout: magazines and reference books often must be read in the library.
+Similarly, database systems use permissions to control and limit access to tables, schemas, and attributes.
+</p>
+
+<h3>physical location of books on shelves: physical location of rows on disk</h3>
+<p>Books are placed on shelves in aisles, close to some books (i.e. on the same shelf), but far from others (i.e. on a different floor).  
+They're organized by the Dewey decimal system.
+Rows are placed on disk in pages and files, close to some rows and far from others -- based on rotational latency and seek time of the hard disk.
+Rows are organized by the clustered index.</p>
+
+<h3>looking at nearby books:  reading nearby rows</h3>
+<p>Imagine how long it would take to find 15 books scattered throughout the library, given only their Dewey decimal numbers.
+How much faster would it be to find 15 books sitting on the same shelf?  (Answer:  seconds versus minutes)
+Similarly, it can be faster to read 10000 sequential rows from a database, than to read 15 randomly scattered rows.
+</p>
+
+<h3>card catalog: secondary index</h3>
+<p>A card catalog is a listing of all the books in the library, typically sorted by author.
+The advantage of such a listing is that books can easily and quickly be found by author (or any author cataloged attribute) -- 
+  simply find the author's entries in the card catalog, read off the Dewey decimal numbers, and locate the books.
+Similarly, database rows can be quickly searched using an indexed attribute.  
+The index stores the column's values in sorted order, along with a primary key value or row pointer.  
+This can dramatically decrease the search time and disk usage.
+</p>
+
+
+<p><h2>Summary</h2>
+
+Libraries and databases are both repositories of information; the one stores that information in books, and the other in rows and tables.  Both have evolved mechanisms for efficient searching, restricted access, and isolation of physical layout from logical layout.  I'm not up to speed on the history of databases, but I'd guess that at least some inspiration for their design was taken from analyzing libraries!</p>
+
+
+
+  </body>
+
+</html>
