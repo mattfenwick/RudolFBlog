@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+  <title>Javascript Derivatives</title>
+  <meta name="description" content="blog" />
+  <meta name="keywords" content="programming" />
+  <meta name="author" content="Matt Fenwick" />
+    
+  <link rel="stylesheet" type="text/css" href="/stylesheets/style.css" />
+  <script type="text/javascript" src="/scripts/jquery.1.6.1.min.js"></script>
+  <script type="text/javascript" src="/scripts/derive.js"></script>
+  <script type="text/javascript" src="/scripts/highcharts.js"></script>
+</head>
+
+<body>
+
+<select id="function">
+ <option name="" value="square">Square</option>
+ <option name="" value="double">Double</option>
+ <option name="" value="cube">Cube</option>
+ <option name="" value="fourth">Fourth power</option>
+ <option name="" value="exp">exponential</option>
+</select>
+<table>
+<tr><td>h</td><td><input id="h"></input></td></tr>
+<tr><td>x min</td><td><input id="xmin"></input></td></tr>
+<tr><td>x max</td><td><input id="xmax"></input></td></tr>
+<tr><td>number of data points</td><td><input id="xsteps"></input></td></tr>
+</table>
+<button id="calculate">Calculate</button>
+
+<div id="chartdiv" style="width: 50%;"></div>
+
+<div id="results"></div>
+</body>
+
+<script>
+
+$(document).ready(function() {
+  $("#h").val(0.0001);
+  $("#xmin").val(-10);
+  $("#xmax").val(10);
+  $("#xsteps").val(20);
+
+  $("#calculate").click(function() {
+    try {
+      var data = runDerivatives({
+        'function': $("#function").val(),
+        xmin: $("#xmin").val(),
+        xmax: $("#xmax").val(),
+        xsteps: $("#xsteps").val(),
+        h: $("#h").val(),
+      });
+//      $("#results").text(JSON.stringify(data));
+      makeChart('chartdiv', data);
+    } catch(e) {
+      alert("error: " + e);
+    }
+  });
+});
+
+        function makeChart(elemid, data) {
+          var myChart = new Highcharts.Chart({
+                chart: {
+                    renderTo: elemid,
+                    defaultSeriesType : 'line',
+                    zoomType : 'xy'
+                },
+                title : {
+                    text : "Derivatives"
+                },
+                xAxis : {
+                    title : {
+                        enabled : true,
+                        text : "x"
+                    },
+                    startOnTick   : false,
+                    endOnTick     : false,
+                    showLastLabel : true,
+                    categories    : data.x  
+                },
+                yAxis : {
+                    title : {
+                        text : 'y'
+                    }
+                },
+                tooltip : {
+                    formatter : function() {
+                        return "x: " + this.x + "<br/>y: " + this.y;
+                    }
+                },
+                legend : {
+                    layout : 'vertical',
+                    align : 'left',
+                    verticalAlign : 'top',
+                    x : 5,
+                    y : 5,
+                    floating : false,
+                    backgroundColor : '#FFFFFF',
+                    borderWidth : 1
+                },
+                plotOptions : {
+                    scatter : {
+                        marker : {
+                            radius : 5,
+                            states : {
+                                hover : {
+                                    enabled : true,
+                                    lineColor : 'rgb(100,100,100)'
+                                }
+                            }
+                        },
+                        states : {
+                            hover : {
+                                marker : {
+                                    enabled : false
+                                }
+                            }
+                        }
+                    }
+                }, 
+                series: [
+                    {'data': data["f"   ], name: "f(x)"},
+                    {'data': data["f'"  ], name: "f'(x)"},
+                    {'data': data["f''" ], name: "f''(x)"},
+                    {'data': data["f'''"], name: "f'''(x)"}
+                ]
+            });
+            return myChart;
+        }
+
+
+</script>
+
+</html>
