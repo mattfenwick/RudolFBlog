@@ -20,8 +20,8 @@ function validate(data) {
   var cleaned = {
     "function": lookupFunction(data.function),
     "h":  parseFloat(data.h),
-    "xmin": parseInt(data.xmin, 10),
-    "xmax": parseInt(data.xmax, 10),
+    "xmin": parseFloat(data.xmin),
+    "xmax": parseFloat(data.xmax),
     "xsteps": parseInt(data.xsteps, 10)
   };
   // check that they're all (except for function) numbers
@@ -90,7 +90,31 @@ var funcs = {
   "double": function(x) {return x * 2;},
   "cube": function(x) {return x * x * x;},
   "exp": Math.exp,
-  "fourth": function(x) {return x * x * x * x;}
+  "fourth": function(x) {return x * x * x * x;},
+  "sine": Math.sin,
+  "cosine": Math.cos,
+  "tangent": function(x) {
+                 if(x < -1.5 || x > 1.5) {
+				     throw new Error("implementation's domain of tangent is -1.5 < x < 1.5");
+				 } else {
+				     return Math.tan(x);
+				 }
+			 },
+  "arcsin": function(x) {
+                if(x >= 1 || x <= -1) {
+				    throw new Error("domain of arcsin is -1 < x < 1");
+				} else {
+				    return Math.asin(x);
+				}
+			},
+  "arccosine": function(x) {
+                   if(x >= 1 || x <= -1) {
+				       throw new Error("domain of arccosine is -1 < x < 1");
+				   } else {
+				       return Math.acos(x);
+				   }
+			   },
+  "arctangent": Math.atan
 };
 
 function lookupFunction(name) {
